@@ -1,0 +1,194 @@
+package telegram
+
+import (
+	"encoding/json"
+	stderrors "errors"
+	"net/http"
+	"strconv"
+	"strings"
+	"text/template"
+	"time"
+
+	"github.com/PaulSonOfLars/gotgbot/v2"
+	"github.com/crazy-max/diun/v4/internal/httputil"
+	"github.com/crazy-max/diun/v4/internal/model"
+	"github.com/crazy-max/diun/v4/internal/msg"
+	"github.com/crazy-max/diun/v4/internal/notif/notifier"
+	"github.com/crazy-max/diun/v4/internal/secret"
+	"github.com/pkg/errors"
+)
+
+const telegramMaxRateLimitAttempts = 3
+
+// Client represents an active Telegram notification object
+type Client struct {
+	*notifier.Notifier
+	cfg  *model.NotifTelegram
+	meta model.Meta
+}
+
+type chatID struct {
+	id     int64
+	topics []int64
+}
+
+// New creates a new Telegram notification instance
+func New(config *model.NotifTelegram, meta model.Meta) notifier.Notifier {
+	return notifier.Notifier{
+		Handler: &Client{
+			cfg:  config,
+			meta: meta,
+		},
+	}
+}
+
+// Name returns notifier's name
+func (c *Client) Name() string {
+	return "telegram"
+}
+
+// Send creates and sends a Telegram notification with an entry
+func (c *Client) Send(entry model.NotifEntry) error {
+	token, err := secret.GetSecret(c.cfg.Token, c.cfg.TokenFile)
+	if err != nil {
+		return errors.Wrap(err, "cannot retrieve token secret for Telegram notifier")
+	}
+
+	cids := c.cfg.ChatIDs
+	cidsRaw, err := secret.GetSecret("", c.cfg.ChatIDsFile)
+	if err != nil {
+		return errors.Wrap(err, "cannot retrieve chat IDs secret for Telegram notifier")
+	}
+	if len(cidsRaw) > 0 {
+		if err = json.Unmarshal([]byte(cidsRaw), &cids); err != nil {
+			return errors.Wrap(err, "cannot unmarshal chat IDs secret for Telegram notifier")
+		}
+	}
+	if len(cids) == 0 {
+		return errors.New("no chat IDs provided for Telegram notifier")
+	}
+
+	parsedChatIDs, err := parseChatIDs(cids)
+	if err != nil {
+		return errors.Wrap(err, "cannot parse chat IDs for Telegram notifier")
+	}
+
+	hc, err := httputil.NewClient(c.cfg.Proxy, false, nil)
+	if err != nil {
+		return errors.Wrap(err, "cannot create HTTP client for Telegram notifier")
+	}
+
+	bot, err := gotgbot.NewBot(token, &gotgbot.BotOpts{
+		BotClient: &gotgbot.BaseBotClient{
+			Client: hc,
+			DefaultRequestOpts: &gotgbot.RequestOpts{
+				Timeout: gotgbot.DefaultTimeout,
+				APIURL:  c.cfg.APIURL,
+			},
+		},
+	})
+	if err != nil {
+		return errors.Wrap(err, "failed to create telegram bot client")
+	}
+
+	message, err := msg.New(msg.Options{
+		Meta:         c.meta,
+		Entry:        entry,
+		TemplateBody: c.cfg.TemplateBody,
+		TemplateFuncs: template.FuncMap{
+			"escapeMarkdown": func(text string) string {
+				text = strings.ReplaceAll(text, "_", "\\_")
+				text = strings.ReplaceAll(text, "*", "\\*")
+				text = strings.ReplaceAll(text, "[", "\\[")
+				text = strings.ReplaceAll(text, "`", "\\`")
+				return text
+			},
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	_, body, err := message.RenderMarkdown()
+	if err != nil {
+		return err
+	}
+
+	for _, cid := range parsedChatIDs {
+		if len(cid.topics) > 0 {
+			for _, topic := range cid.topics {
+				if err = sendTelegramMessage(bot, cid.id, topic, string(body), *c.cfg.DisableNotification); err != nil {
+					return err
+				}
+			}
+		} else {
+			if err = sendTelegramMessage(bot, cid.id, 0, string(body), *c.cfg.DisableNotification); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func parseChatIDs(entries []string) ([]chatID, error) {
+	var chatIDs []chatID
+	for _, entry := range entries {
+		parts := strings.Split(entry, ":")
+		if len(parts) < 1 || len(parts) > 2 {
+			return nil, errors.Errorf("invalid chat ID %q", entry)
+		}
+		id, err := strconv.ParseInt(parts[0], 10, 64)
+		if err != nil {
+			return nil, errors.Wrap(err, "invalid chat ID")
+		}
+		var topics []int64
+		if len(parts) == 2 {
+			for topicPart := range strings.SplitSeq(parts[1], ";") {
+				topic, err := strconv.ParseInt(topicPart, 10, 64)
+				if err != nil {
+					return nil, errors.Wrapf(err, "invalid topic %q for chat ID %d", topicPart, id)
+				}
+				topics = append(topics, topic)
+			}
+		}
+		chatIDs = append(chatIDs, chatID{
+			id:     id,
+			topics: topics,
+		})
+	}
+	return chatIDs, nil
+}
+
+func sendTelegramMessage(bot *gotgbot.Bot, chatID int64, threadID int64, message string, disableNotification bool) error {
+	opts := &gotgbot.SendMessageOpts{
+		MessageThreadId:     threadID,
+		ParseMode:           gotgbot.ParseModeMarkdown,
+		LinkPreviewOptions:  &gotgbot.LinkPreviewOptions{IsDisabled: true},
+		DisableNotification: disableNotification,
+	}
+
+	for attempt := 1; attempt <= telegramMaxRateLimitAttempts; attempt++ {
+		_, err := bot.SendMessage(chatID, message, opts)
+		if err == nil {
+			return nil
+		}
+
+		retryAfter, ok := telegramRetryAfter(err)
+		if !ok || attempt == telegramMaxRateLimitAttempts {
+			return err
+		}
+
+		time.Sleep(retryAfter)
+	}
+
+	return nil
+}
+
+func telegramRetryAfter(err error) (time.Duration, bool) {
+	telegramErr, ok := stderrors.AsType[*gotgbot.TelegramError](err)
+	if !ok || telegramErr.Code != http.StatusTooManyRequests || telegramErr.ResponseParams == nil || telegramErr.ResponseParams.RetryAfter < 0 {
+		return 0, false
+	}
+	return time.Duration(telegramErr.ResponseParams.RetryAfter) * time.Second, true
+}

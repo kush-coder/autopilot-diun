@@ -1,0 +1,557 @@
+# FAQ
+
+## Timezone
+
+By default, all interpretation and scheduling is done with your local timezone (`TZ` environment variable).
+
+Cron schedule may also override the timezone to be interpreted in by providing an additional space-separated field
+at the beginning of the cron spec, of the form `CRON_TZ=<timezone>`:
+
+```yaml
+watch:
+  schedule: "CRON_TZ=Asia/Tokyo 0 */6 * * *"
+```
+
+## Test notifications
+
+Through the [command line](usage/command-line.md#notif-test) with:
+
+```shell
+diun notif test
+```
+
+Or within a container:
+
+```shell
+docker compose exec diun diun notif test
+```
+
+## Docker Compose with Prometheus metrics
+
+You can run Diun and Prometheus in the same Compose project and scrape Diun
+over the internal Compose network. This avoids publishing the Diun metrics
+port on the host.
+
+Create the metrics token file without a trailing newline:
+
+```shell
+mkdir -p secrets prometheus
+printf '%s' 'change-me' > secrets/diun_metrics_token
+```
+
+Create `prometheus/prometheus.yml`:
+
+```yaml
+global:
+  scrape_interval: 30s
+
+scrape_configs:
+  - job_name: diun
+    metrics_path: /metrics
+    authorization:
+      type: Bearer
+      credentials_file: /run/secrets/diun_metrics_token
+    static_configs:
+      - targets:
+          - diun:9090
+```
+
+Then use the following Compose file:
+
+```yaml
+name: diun
+
+services:
+  diun:
+    image: crazymax/diun:latest
+    container_name: diun
+    command: serve
+    volumes:
+      - "./data:/data"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    environment:
+      - "TZ=Europe/Paris"
+      - "DIUN_WATCH_SCHEDULE=0 */6 * * *"
+      - "DIUN_PROVIDERS_DOCKER=true"
+      - "DIUN_METRICS_ENABLED=true"
+      - "DIUN_METRICS_ADDR=:9090"
+      - "DIUN_METRICS_PATH=/metrics"
+      - "DIUN_METRICS_TOKENFILE=/run/secrets/diun_metrics_token"
+    secrets:
+      - diun_metrics_token
+    labels:
+      - "diun.enable=true"
+    restart: always
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    volumes:
+      - "./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro"
+      - "prometheus-data:/prometheus"
+    ports:
+      - "127.0.0.1:9091:9090"
+    secrets:
+      - diun_metrics_token
+    restart: always
+
+secrets:
+  diun_metrics_token:
+    file: ./secrets/diun_metrics_token
+
+volumes:
+  prometheus-data:
+```
+
+Prometheus will scrape Diun at `diun:9090`, and the Prometheus UI will be
+available on `http://127.0.0.1:9091`.
+
+## Customize the hostname
+
+The hostname that appears in your notifications is the one associated with the
+container if you use the Diun image with `docker run` or `docker compose up -d`.
+By default, it's a random string like `d2219b854598`. To change it:
+
+```console
+$ docker run --hostname "diun" ...
+```
+
+Or if you use Docker Compose:
+
+```yaml
+services:
+  diun:
+    image: crazymax/diun:latest
+    hostname: diun
+```
+
+## Notification template
+
+The title and body of a notification message can be customized for each notifier through `templateTitle` and
+`templateBody` fields except for those rendering _JSON_ or _Env_ like [Amqp](notif/amqp.md),
+[MQTT](notif/mqtt.md), [Script](notif/script.md) and [Webhook](notif/webhook.md).
+
+Templating is supported with the following fields:
+
+| Key                             | Description                                                                           |
+|---------------------------------|---------------------------------------------------------------------------------------|
+| `.Meta.ID`                      | App ID: `diun`                                                                        |
+| `.Meta.Name`                    | App Name: `Diun`                                                                      |
+| `.Meta.Desc`                    | App description: `Docker image update notifier`                                       |
+| `.Meta.URL`                     | App repo URL: `https://github.com/crazy-max/diun`                                     |
+| `.Meta.Logo`                    | App logo URL: `https://raw.githubusercontent.com/crazy-max/diun/master/.res/diun.png` |
+| `.Meta.Author`                  | App author: `CrazyMax`                                                                |
+| `.Meta.Version`                 | App version: `v4.19.0`                                                                |
+| `.Meta.UserAgent`               | App user-agent used to talk with registries: `diun/4.19.0 go/1.16 Linux`              |
+| `.Meta.Hostname`                | Hostname                                                                              |
+| `.Entry.Status`                 | Entry status. Can be `new`, `update`, `unchange`, `skip` or `error`                   |
+| `.Entry.Provider`               | [Provider](config/providers.md) used                                                  |
+| `.Entry.Image`                  | Docker image name. e.g. `docker.io/crazymax/diun:latest`                              |
+| `.Entry.Image.Domain`           | Docker image domain. e.g. `docker.io`                                                 |
+| `.Entry.Image.Path`             | Docker image path. e.g. `crazymax/diun`                                               |
+| `.Entry.Image.Tag`              | Docker image tag. e.g. `latest`                                                       |
+| `.Entry.Image.Digest`           | Docker image digest                                                                   |
+| `.Entry.Image.HubLink`          | Docker image hub link (if available). e.g. `https://hub.docker.com/r/crazymax/diun`   |
+| `.Entry.Manifest.Name`          | Manifest name. e.g. `docker.io/crazymax/diun`                                         |
+| `.Entry.Manifest.Tag`           | Manifest tag. e.g. `latest`                                                           |
+| `.Entry.Manifest.MIMEType`      | Manifest MIME type. e.g. `application/vnd.docker.distribution.manifest.list.v2+json`  |
+| `.Entry.Manifest.Digest`        | Manifest digest                                                                       |
+| `.Entry.Manifest.Created`       | Manifest created date. e.g. `2021-06-20T12:23:56Z`                                    |
+| `.Entry.Manifest.DockerVersion` | Version of Docker that was used to build the image. e.g. `20.10.7`                    |
+| `.Entry.Manifest.Labels`        | Image labels                                                                          |
+| `.Entry.Manifest.Layers`        | Image layers                                                                          |
+| `.Entry.Manifest.Platform`      | Platform that the image is runs on. e.g. `linux/amd64`                                |
+| `.Entry.Metadata`               | Key-value pair of image metadata specific to each provider                            |
+
+The following helper functions are also available in notification templates.
+Helpers that operate on a string take the target string as their last argument,
+so they can be used directly or in a pipeline.
+
+| Function          | Description                             | Example                                                      |
+|-------------------|-----------------------------------------|--------------------------------------------------------------|
+| `lower`           | Converts a string to lower case         | `{{ lower .Entry.Image.Tag }}`                               |
+| `upper`           | Converts a string to upper case         | `{{ upper .Entry.Image.Tag }}`                               |
+| `replace`         | Replaces all occurrences of a substring | `{{ replace "/" "-" .Entry.Image.Path }}`                    |
+| `trim`            | Removes leading and trailing whitespace | `{{ trim .Entry.Metadata.foo }}`                             |
+| `trimPrefix`      | Removes a prefix if present             | `{{ trimPrefix "v" .Entry.Image.Tag }}`                      |
+| `trimSuffix`      | Removes a suffix if present             | `{{ trimSuffix "-alpine" .Entry.Image.Tag }}`                |
+| `regexReplaceAll` | Replaces all regular expression matches | `{{ regexReplaceAll "[^a-zA-Z0-9]+" "-" .Entry.Image.Tag }}` |
+
+For example, this normalizes an image path with a pipeline:
+
+```gotemplate
+{{ .Entry.Image.Path | replace "/" "-" | lower }}
+```
+
+## Authentication against the registry
+
+You can authenticate against the registry through the [`regopts` settings](config/regopts.md) or you can mount
+your docker config file `$HOME/.docker/config.json` if you are already connected to the registry with `docker login`:
+
+```yaml
+name: diun
+
+services:
+  diun:
+    image: crazymax/diun:latest
+    container_name: diun
+    command: serve
+    volumes:
+      - "./data:/data"
+      - "/root/.docker/config.json:/root/.docker/config.json:ro"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    environment:
+      - "TZ=Europe/Paris"
+      - "DIUN_WATCH_SCHEDULE=0 */6 * * *"
+      - "DIUN_PROVIDERS_DOCKER=true"
+      - "DIUN_PROVIDERS_DOCKER_WATCHBYDEFAULT=true"
+    restart: always
+```
+
+## Run Diun behind an HTTP proxy
+
+If Diun must reach registries or notification endpoints through a network
+proxy such as Squid, configure the proxy in the Diun container environment with
+the standard `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` variables.
+
+Host operating system proxy settings and Docker daemon proxy settings are not
+automatically inherited by the Diun container. Docker daemon proxy settings
+help Docker pull images, while Diun's own registry checks are made by the Diun
+process running inside the container.
+
+For example:
+
+```yaml
+name: diun
+
+services:
+  diun:
+    image: crazymax/diun:latest
+    container_name: diun
+    command: serve
+    volumes:
+      - "./data:/data"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    environment:
+      - "TZ=Europe/Paris"
+      - "DIUN_WATCH_SCHEDULE=0 */6 * * *"
+      - "DIUN_PROVIDERS_DOCKER=true"
+      - "DIUN_PROVIDERS_DOCKER_WATCHBYDEFAULT=true"
+      - "HTTP_PROXY=http://squid.local:3128"
+      - "HTTPS_PROXY=http://squid.local:3128"
+      - "NO_PROXY=localhost,127.0.0.1,::1"
+    restart: always
+```
+
+Use `NO_PROXY` for endpoints that should be contacted directly, such as local
+services, private registries available on the same network, or the Docker
+daemon if it is reached over TCP.
+
+This is different from a Docker registry caching proxy such as Nexus or Harbor.
+In that case the proxy is a registry endpoint, so images should be configured
+with the registry name that Diun should check.
+
+## field docker|swarm uses unsupported type: invalid
+
+If you have the error `failed to decode configuration from file: field docker uses unsupported type: invalid` that's
+because your `docker`, `swarm` or `kubernetes` provider is not initialized in your configuration:
+
+!!! failure
+    ```yaml
+    providers:
+      docker:
+    ```
+
+should be:
+
+!!! success
+    ```yaml
+    providers:
+      docker: {}
+    ```
+
+## No image found in manifest list for architecture, variant, OS
+
+If you encounter this kind of warning, you are probably using the [file provider](providers/file.md) for an
+image with an erroneous or empty platform. If the platform is not filled in, it will be deduced automatically from the
+information of your operating system on which Diun is running.
+
+In the example below, Diun is running (`diun_x.x.x_windows_i386.zip`) on Windows 10 and tries to analyze the
+`crazymax/cloudflared` image with the detected platform (`windows/386)`:
+
+```yaml
+- name: crazymax/cloudflared:2020.2.1
+```
+
+But this platform is not supported by this image as you can see [on DockerHub](https://hub.docker.com/layers/crazymax/cloudflared/2020.2.1/images/sha256-137eea4e84ec4c6cb5ceb2017b9788dcd7b04f135d756e1f37e3e6673c0dd9d2?context=explore):
+
+!!! warning
+    `Fri, 27 Mar 2020 01:20:03 UTC WRN Cannot get remote manifest error="Cannot create image closer: Error choosing image instance: no image found in manifest list for architecture 386, variant \"\", OS windows" image=docker.io/image=crazymax/cloudflared:2020.2.1 provider=file`
+
+You have to force the platform for this image if you are not on a supported platform:
+
+```yaml
+- name: crazymax/cloudflared:2020.2.1
+  platform:
+    os: linux
+    arch: amd64
+```
+
+!!! success
+    `Fri, 27 Mar 2020 01:24:33 UTC INF New image found image=docker.io/crazymax/cloudflared:2020.2.1 provider=file`
+
+## Too many requests to registry
+
+The error `Cannot create image closer: too many requests to registry` is returned when the HTTP status code returned
+by the registry is 429.
+
+This can happen on the DockerHub registry because of the [rate-limited anonymous pulls](https://docs.docker.com/docker-hub/download-rate-limit/).
+
+To solve this you must first be authenticated against the registry through the [`regopts` settings](config/regopts.md): 
+
+```yaml
+regopts:
+  - name: "docker.io"
+    selector: image
+    username: foo
+    password: bar
+```
+
+If this is not enough, tweak the [`schedule` setting](config/watch.md#schedule) with something
+like `0 */6 * * *` (every 6 hours).
+
+## Docker Hub rate limits
+
+Docker is now [enforcing Docker Hub pull rate limits](https://www.docker.com/increase-rate-limits). This means you can
+make 100 pull image requests per six hours for anonymous usage, and 200 pull image requests per six hours
+for free Docker accounts. But this rate limit is not necessarily an indicator on the number of times an image has
+actually been downloaded. In fact, their _pulls_ counter/metric is actually a representation of the number of times a
+manifest for a particular image has been retrieved.
+
+As you probably know, Diun downloads the manifest of an image from its registry through a `GET` request to be able to
+retrieve its inside metadata. Fortunately Diun doesn't perform a `GET` request at each scan but only when an image
+has been updated or added on the registry. This allows us not to exceed this rate limit in our situation, but
+it also **strongly depends on the number of images you scan**. To increase your pull rate limits you can upgrade
+your account to a [Docker Pro or Team subscription](https://www.docker.com/pricing) and authenticate against the
+registry through the [`regopts` settings](config/regopts.md): 
+
+```yaml
+regopts:
+  - name: "docker.io"
+    selector: image
+    username: foo
+    password: bar
+```
+
+Or you can tweak the [`schedule` setting](config/watch.md#schedule) with something like `0 */6 * * *` (every 6 hours).
+
+!!! warning
+    Also be careful with the `watch_repo` setting as it will fetch manifest for **ALL** tags available for the image.
+
+## Tags sorting when using `watch_repo`
+
+When you use the `watch_repo` setting, Diun will fetch all tags available for
+the image. Depending on the registry, order of the tags list can change.
+
+You can use the `sort_tags` setting available for each provider to use a
+specific sorting method for the tags list.
+
+* `default`: do not sort and use the expected tags list from the registry
+* `reverse`: reverse order for the tags list from the registry
+* `lexicographical`: sort the tags list lexicographically
+* `semver`: sort the tags list using semantic versioning
+
+Given the following list of tags received from the registry:
+
+```json
+[
+  "0.1.0",
+  "0.4.0",
+  "3.0.0-beta.1",
+  "3.0.0-beta.4",
+  "4",
+  "4.0.0",
+  "4.0.0-beta.1",
+  "4.1.0",
+  "4.1.1",
+  "4.10.0",
+  "4.11.0",
+  "4.20",
+  "4.20.0",
+  "4.20.1",
+  "4.3.0",
+  "4.3.1",
+  "4.9.0",
+  "edge",
+  "latest"
+]
+```
+
+Here is the result for `reverse`:
+
+```json
+[
+  "latest",
+  "edge",
+  "4.9.0",
+  "4.3.1",
+  "4.3.0",
+  "4.20.1",
+  "4.20.0",
+  "4.20",
+  "4.11.0",
+  "4.10.0",
+  "4.1.1",
+  "4.1.0",
+  "4.0.0-beta.1",
+  "4.0.0",
+  "4",
+  "3.0.0-beta.4",
+  "3.0.0-beta.1",
+  "0.4.0",
+  "0.1.0"
+]
+```
+
+And for `semver`:
+
+```json
+[
+  "4.20.1",
+  "4.20.0",
+  "4.20",
+  "4.11.0",
+  "4.10.0",
+  "4.9.0",
+  "4.3.1",
+  "4.3.0",
+  "4.1.1",
+  "4.1.0",
+  "4.0.0",
+  "4",
+  "4.0.0-beta.1",
+  "3.0.0-beta.4",
+  "3.0.0-beta.1",
+  "0.4.0",
+  "0.1.0",
+  "edge",
+  "latest"
+]
+```
+
+## Custom CA certificates for notification endpoints
+
+If your notification endpoint (e.g. Gotify, Ntfy, Telegram, Webhook, etc.) is
+using a self-signed certificate or a certificate issued by a private CA, you
+can provide the CA certificate to Diun through the `tlsCaCertFiles` setting:
+
+```yaml
+notif:
+  gotify:
+    endpoint: https://gotify.foo.com
+    token: Token123456
+    tlsCaCertFiles:
+      - /certs/ca-gotify.crt
+```
+
+Then mount the certificate file in the container:
+
+```yaml
+name: diun
+
+services:
+  diun:
+    image: crazymax/diun:latest
+    container_name: diun
+    command: serve
+    volumes:
+      - "./data:/data"
+      - "/etc/ssl/certs/ca-gotify.crt:/certs/ca-gotify.crt:ro"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    environment:
+      - "TZ=Europe/Paris"
+      - "DIUN_WATCH_SCHEDULE=0 */6 * * *"
+      - "DIUN_PROVIDERS_DOCKER=true"
+      - "DIUN_PROVIDERS_DOCKER_WATCHBYDEFAULT=true"
+    restart: always
+```
+
+## Profiling
+
+Diun provides a simple way to manage runtime/pprof profiling through the
+[`--profiler-path` and `--profiler` flags with `serve` command](usage/command-line.md#serve):
+
+```yaml
+name: diun
+
+services:
+  diun:
+    image: crazymax/diun:latest
+    container_name: diun
+    command: serve
+    volumes:
+      - "./data:/data"
+      - "./profiler:/profiler"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    environment:
+      - "TZ=Europe/Paris"
+      - "LOG_LEVEL=info"
+      - "PROFILER_PATH=/profiler"
+      - "PROFILER=mem"
+      - "DIUN_PROVIDERS_DOCKER=true"
+    restart: always
+```
+
+The following profilers are available:
+
+* `cpu` enables cpu profiling
+* `mem` enables memory profiling
+* `alloc` enables memory profiling and changes which type of memory to profile allocations
+* `heap` enables memory profiling and changes which type of memory profiling to profile the heap
+* `routines` enables goroutine profiling
+* `mutex` enables mutex profiling
+* `threads` enables thread creation profiling
+* `block` enables block (contention) profiling
+
+## Image with digest and `image:tag@digest` format
+
+Analysis of an image with a digest but without tag will be done using `latest`
+as a tag which could lead to false positives.
+
+For example `crazymax/diun@sha256:fa80af32a7c61128ffda667344547805b3c5e7721ecbbafd70e35bb7bb7c989f`
+is referring to `crazymax/diun:4.24.0` tag, so it's not correct to assume that
+we want to analyze `crazymax/diun:latest`.
+
+You can still pin an image to a specific digest and analyze the image if the
+tag is specified using the `image:tag@digest` format. Taking the previous
+example if we specify `crazymax/diun:4.24.0@sha256:fa80af32a7c61128ffda667344547805b3c5e7721ecbbafd70e35bb7bb7c989f`,
+then `crazymax/diun:4.24.0` will be analyzed.
+
+## Secrets loaded from files and trailing newlines
+
+When Diun reads a secret from a file (e.g. Docker or Kubernetes secrets), the
+file content is used exactly as-is, including any trailing newline characters.
+
+This is intentional.
+
+A secret file is treated as an opaque value, not as a line of text.
+Automatically trimming or normalizing file content would silently modify the
+secret and could cause authentication or integration issues. Diun therefore
+does not attempt to guess whether a trailing newline was added intentionally or
+by tooling.
+
+This behavior aligns with common secret-management systems (such as Kubernetes
+and Vault), which model secrets as arbitrary data rather than text strings.
+
+If a trailing newline is not desired, ensure the file is created without one,
+for example:
+
+```shell
+printf '%s' 'mysecret' > secret.txt
+```
+
+Any future trimming or text-normalization behavior would be introduced
+explicitly and opt-in.

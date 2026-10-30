@@ -1,0 +1,132 @@
+db:
+  path: diun.db
+
+watch:
+  workers: 100
+  schedule: "*/30 * * * *"
+  jitter: 30s
+  firstCheckNotif: false
+  compareDigest: true
+  healthchecks:
+    baseURL: https://hc-ping.com/
+    uuid: 5bf66975-d4c7-4bf5-bcc8-b8d8a82ea278
+
+notif:
+  amqp:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+    queue: queue
+  discord:
+    webhookURL: https://discordapp.com/api/webhooks/1234567890/Abcd-eFgh-iJklmNo_pqr
+    mentions:
+      - "@here"
+      - "@everyone"
+      - "<@124>"
+      - "<@125>"
+      - "<@&200>"
+    renderFields: true
+    timeout: 10s
+  elasticsearch:
+    address: https://elastic.foo.com
+    username: elastic
+    password: password
+    client: diun
+    index: diun-notifications
+    timeout: 10s
+  gotify:
+    endpoint: http://gotify.foo.com
+    token: Token123456
+    priority: 1
+    timeout: 10s
+  mail:
+    host: localhost
+    port: 25
+    ssl: false
+    insecureSkipVerify: false
+    from: diun@example.com
+    to: webmaster@example.com
+    templateBody: |
+      Docker tag {{ if .Entry.Image.HubLink }}[**{{ .Entry.Image }}**]({{ .Entry.Image.HubLink }}){{ else }}**{{ .Entry.Image }}**{{ end }}
+      which you subscribed to through {{ .Entry.Provider }} provider has been {{ if (eq .Entry.Status "new") }}newly added{{ else }}updated{{ end }}.
+
+      This image has been {{ if (eq .Entry.Status "new") }}created{{ else }}updated{{ end }} at
+      <code>{{ .Entry.Manifest.Created.Format "Jan 02, 2006 15:04:05 UTC" }}</code> with digest <code>{{ .Entry.Manifest.Digest }}</code>
+      for <code>{{ .Entry.Manifest.Platform }}</code> platform.
+  matrix:
+    homeserverURL: https://matrix.org
+    user: "@foo:matrix.org"
+    password: bar
+    roomID: "!abcdefGHIjklmno:matrix.org"
+  mqtt:
+    scheme: "mqtt"
+    host: "localhost"
+    port: 1883
+    username: "guest"
+    password: "guest"
+    client: "diun"
+    topic: "docker/diun"
+    qos: 0
+  ntfy:
+    endpoint: https://ntfy.sh
+    topic: diun-acce65a0-b777-46f9-9a11-58c67d1579c4
+    priority: 3
+    tags:
+      - package
+    timeout: 10s
+  pushover:
+    token: uQiRzpo4DXghDmr9QzzfQu27cmVRsG
+    recipient: gznej3rKEVAvPUxu9vvNnqpmZpokzF
+  rocketchat:
+    endpoint: http://rocket.foo.com:3000
+    channel: "#general"
+    userID: abcdEFGH012345678
+    token: Token123456
+    renderAttachment: false
+    timeout: 10s
+  script:
+    cmd: "uname"
+    args:
+      - "-a"
+  slack:
+    webhookURL: https://hooks.slack.com/services/ABCD12EFG/HIJK34LMN/01234567890abcdefghij
+    renderFields: false
+  teams:
+    webhookURL: https://outlook.office.com/webhook/ABCD12EFG/HIJK34LMN/01234567890abcdefghij
+    cardType: adaptiveCard
+    renderFacts: true
+  telegram:
+    token: abcdef123456
+    chatIDs:
+      - "8547439"
+      - "1234567"
+      - "567891234:25"
+      - "891256734:25;12"
+  webhook:
+    endpoint: http://webhook.foo.com/sd54qad89azd5a
+    method: GET
+    headers:
+      content-type: application/json
+      authorization: Token123456
+    timeout: 10s
+
+regopts:
+  - name: "myregistry"
+    timeout: 5s
+  - name: "docker.io"
+    selector: image
+    username: foo
+    password: bar
+  - name: "docker.io/crazymax"
+    selector: image
+    usernameFile: ./fixtures/run_secrets_username
+    passwordFile: ./fixtures/run_secrets_username
+
+providers:
+  docker:
+    watchByDefault: true
+    watchStopped: true
+  swarm: {}
+  file:
+    filename: ./fixtures/file.yml

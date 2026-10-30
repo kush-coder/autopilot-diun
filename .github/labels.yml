@@ -1,0 +1,165 @@
+## more info https://github.com/crazy-max/ghaction-github-labeler
+-
+  name: "bot"
+  color: "69cde9"
+  description: ""
+-
+  name: "good first issue"
+  color: "7057ff"
+  description: ""
+-
+  name: "help wanted"
+  color: "4caf50"
+  description: ""
+-
+  name: "area/ci"
+  color: "ed9ca9"
+  description: ""
+-
+  name: "area/dockerfile"
+  color: "03a9f4"
+  description: ""
+-
+  name: "area/notif"
+  color: "ce6cf8"
+  description: ""
+-
+  name: "area/notif/amqp"
+  color: "ce6cf8"
+  description: ""
+-
+  name: "area/notif/discord"
+  color: "ce6cf8"
+  description: ""
+-
+  name: "area/notif/gotify"
+  color: "ce6cf8"
+  description: ""
+-
+  name: "area/notif/mail"
+  color: "ce6cf8"
+  description: ""
+-
+  name: "area/notif/matrix"
+  color: "ce6cf8"
+  description: ""
+-
+  name: "area/notif/mqtt"
+  color: "ce6cf8"
+  description: ""
+-
+  name: "area/notif/ntfy"
+  color: "ce6cf8"
+  description: ""
+-
+  name: "area/notif/pushover"
+  color: "ce6cf8"
+  description: ""
+-
+  name: "area/notif/rocketchat"
+  color: "ce6cf8"
+  description: ""
+-
+  name: "area/notif/script"
+  color: "ce6cf8"
+  description: ""
+-
+  name: "area/notif/signal-rest"
+  color: "ce6cf8"
+  description: ""
+-
+  name: "area/notif/slack"
+  color: "ce6cf8"
+  description: ""
+-
+  name: "area/notif/teams"
+  color: "ce6cf8"
+  description: ""
+-
+  name: "area/notif/telegram"
+  color: "ce6cf8"
+  description: ""
+-
+  name: "area/notif/webhook"
+  color: "ce6cf8"
+  description: ""
+-
+  name: "area/provider"
+  color: "eeb914"
+  description: ""
+-
+  name: "area/provider/docker"
+  color: "eeb914"
+  description: ""
+-
+  name: "area/provider/dockerfile"
+  color: "eeb914"
+  description: ""
+-
+  name: "area/provider/file"
+  color: "eeb914"
+  description: ""
+-
+  name: "area/provider/kubernetes"
+  color: "eeb914"
+  description: ""
+-
+  name: "area/provider/nomad"
+  color: "eeb914"
+  description: ""
+-
+  name: "area/provider/swarm"
+  color: "eeb914"
+  description: ""
+-
+  name: "kind/bug"
+  color: "b60205"
+  description: ""
+-
+  name: "kind/dependencies"
+  color: "0366d6"
+  description: ""
+-
+  name: "kind/docs"
+  color: "c5def5"
+  description: ""
+-
+  name: "kind/duplicate"
+  color: "cccccc"
+  description: ""
+-
+  name: "kind/enhancement"
+  color: "0054ca"
+  description: ""
+-
+  name: "kind/invalid"
+  color: "e6e6e6"
+  description: ""
+-
+  name: "kind/upstream"
+  color: "fbca04"
+  description: ""
+-
+  name: "kind/wontfix"
+  color: "ffffff"
+  description: ""
+-
+  name: "status/automerge"
+  color: "8f4fbc"
+  description: ""
+-
+  name: "status/needs-investigation"
+  color: "e6625b"
+  description: ""
+-
+  name: "status/needs-more-info"
+  color: "795548"
+  description: ""
+-
+  name: "status/stale"
+  color: "237da0"
+  description: ""
+-
+  name: "status/triage"
+  color: "dde4b7"
+  description: ""

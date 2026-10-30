@@ -1,0 +1,173 @@
+site_name: Diun
+site_description: Receive notifications when a Docker image is updated on a Docker registry
+site_author: CrazyMax
+site_url: https://crazymax.dev/diun/
+edit_uri: edit/master/docs/
+docs_dir: docs
+
+repo_name: crazy-max/diun
+repo_url: https://github.com/crazy-max/diun
+
+extra:
+  seo:
+    google: Kscpetr5E2zNDM0pqz-0xhtPZ77oY2oAS6Lid6yEUUM
+    bing: D188E0BEC1AB6E7C1E0194BFC35D0033
+    #alexa:
+    #yandex:
+  social:
+    - icon: fontawesome/brands/github-alt
+      link: https://github.com/crazy-max/diun
+    - icon: fontawesome/brands/twitter
+      link: https://twitter.com/crazyws
+  plausible:
+    server: plausible.re4per.com
+    domain: crazymax.dev/diun
+  template:
+    notif:
+      defaultTitle: |
+        {{ .Entry.Image }} {{ if (eq .Entry.Status "new") }}is available{{ else }}has been updated{{ end }}
+      defaultBody: |
+        Docker tag {{ if .Entry.Image.HubLink }}[**{{ .Entry.Image }}**]({{ .Entry.Image.HubLink }}){{ else }}**{{ .Entry.Image }}**{{ end }} which you subscribed to through {{ .Entry.Provider }} provider {{ if (eq .Entry.Status "new") }}is available{{ else }}has been updated{{ end }} on {{ .Entry.Image.Domain }} registry (triggered by {{ .Meta.Hostname }} host).
+
+theme:
+  name: material
+  custom_dir: docs/_overrides
+  language: en
+  features:
+    - search.highlight
+    - search.share
+    - search.suggest
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: light blue
+      accent: light blue
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: light blue
+      accent: light blue
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  font:
+    text: Roboto
+    code: Roboto Mono
+  logo: assets/logo.png
+  favicon: assets/favicon.ico
+  include_search_page: false
+  search_index_only: true
+
+extra_css:
+  - assets/stylesheets/extra.css
+
+markdown_extensions:
+  - admonition
+  - codehilite
+  - footnotes
+  - markdown_include.include:
+      base_path: docs
+  - meta
+  - pymdownx.details
+  - pymdownx.magiclink:
+      repo_url_shorthand: true
+      repo_url_shortener: true
+      provider: github
+      user: crazy-max
+      repo: diun
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - toc:
+      permalink: true
+
+plugins:
+  - privacy:
+      assets: false
+      links: true
+      links_attr_map:
+        target: _blank
+      links_noopener: true
+  - exclude:
+      glob:
+        - "_overrides/*"
+  - git-revision-date-localized:
+      type: iso_datetime
+      enable_creation_date: true
+      fallback_to_build_date: true
+  - macros:
+      j2_block_start_string: '[[%'
+      j2_block_end_string: '%]]'
+      j2_variable_start_string: '[['
+      j2_variable_end_string: ']]'
+      module_name: hack/mkdocs_macros
+  - search:
+      lang:
+        - en
+
+nav:
+  - Home: index.md
+  - Installation:
+    - From Docker image: install/docker.md
+    - From binary: install/binary.md
+    - Linux service: install/linux-service.md
+  - Usage:
+    - Command line: usage/command-line.md
+    - Basic example: usage/basic-example.md
+  - Configuration:
+    - Overview: config/index.md
+    - .db: config/db.md
+    - .watch: config/watch.md
+    - .defaults: config/defaults.md
+    - .metrics: config/metrics.md
+    - .notif: config/notif.md
+    - .regopts: config/regopts.md
+    - .providers: config/providers.md
+  - Notifications:
+    - Amqp: notif/amqp.md
+    - Apprise: notif/apprise.md
+    - Discord: notif/discord.md
+    - Elasticsearch: notif/elasticsearch.md
+    - Gotify: notif/gotify.md
+    - Mail: notif/mail.md
+    - Matrix: notif/matrix.md
+    - MQTT: notif/mqtt.md
+    - Ntfy: notif/ntfy.md
+    - Pushover: notif/pushover.md
+    - Rocket.Chat: notif/rocketchat.md
+    - Script: notif/script.md
+    - Signal (REST API): notif/signalrest.md
+    - Slack: notif/slack.md
+    - Teams: notif/teams.md
+    - Telegram: notif/telegram.md
+    - Webhook: notif/webhook.md
+  - Providers:
+    - Docker: providers/docker.md
+    - Containerd: providers/containerd.md
+    - Kubernetes: providers/kubernetes.md
+    - Swarm: providers/swarm.md
+    - Nomad: providers/nomad.md
+    - Dockerfile: providers/dockerfile.md
+    - File: providers/file.md
+  - User guides:
+    - Blog posts: user-guides/blog-posts.md
+    - Docker + File providers: user-guides/docker-file-providers.md
+  - FAQ: faq.md
+  - Changelog: changelog.md
+  - Migration:
+    - Diun v4.1 to v4.29: migration/v4.1-to-v4.29.md
+    - Diun v4.0 to v4.17: migration/v4.0-to-v4.17.md
+    - Diun v3 to v4: migration/v3-to-v4.md
+    - Diun v2 to v3: migration/v2-to-v3.md
+    - Diun v1 to v2: migration/v1-to-v2.md
+    - Diun v0 to v1: migration/v0-to-v1.md
+  - Reporting an issue: reporting-issue.md
+  - Contributing: contributing.md
+  - Donate: donate.md

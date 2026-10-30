@@ -1,0 +1,9 @@
+watch:
+  workers: 20
+  schedule: "0 */6 * * *"
+  jitter: 0
+
+providers:
+  docker:
+    watchByDefault: true
+    watchStopped: true
